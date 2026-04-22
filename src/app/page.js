@@ -112,12 +112,13 @@ export default function Dashboard() {
       );
 
       if (selWeek !== "__all__") {
-        // أسبوع واحد محدد
+        // أسبوع واحد محدد — يظهر الجميع حتى غير المرصودين بصفر
         const ws  = weekStatsList[0];
         const rec = ws
           ? data.structured?.find((r) => r.name === s.name && r.week === ws.week && r.month === ws.month)
           : null;
-        return { ...s, displayPct: rec?.percentage ?? null, weekRecord: rec };
+        // إذا ما رُصد → نسبة 0 (لا null)
+        return { ...s, displayPct: rec?.percentage ?? 0, weekRecord: rec };
       }
 
       // متعدد أسابيع: المتوسط = مجموع النسب ÷ عدد الأسابيع المفعّلة
@@ -127,7 +128,10 @@ export default function Dashboard() {
         : null;
 
       return { ...s, displayPct: avg };
-    }).filter((s) => s.displayPct !== null && s.displayPct > 0);
+    }).filter((s) => {
+      if (selWeek !== "__all__") return s.displayPct !== null; // يشمل الصفر
+      return s.displayPct !== null && s.displayPct > 0;        // جميع الأسابيع: يخفي الصفر
+    });
 
     // ── الإحصائيات بعدد الطلاب (لا بعدد السجلات) ────────────
     const avg      = students.length
