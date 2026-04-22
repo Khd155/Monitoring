@@ -74,16 +74,55 @@ export async function fetchAllSheets() {
 export function transformWideToStructured(rawRows, monthLabel) {
   if (!rawRows || rawRows.length < 3) return [];
 
-  const row0 = rawRows[0] || [];
-  const row1 = rawRows[1] || [];
+  // ── اكتشاف تلقائي لصفوف العناوين ───────────────────────
+  // نبحث عن الصف الذي يحتوي على أسماء الأسابيع
+  // والصف الذي يحتوي على: الحضور، الحفظ، الصغرى...
+  let weekRow   = -1; // الصف الذي فيه أسماء الأسابيع
+  let headerRow = -1; // الصف الذي فيه الحضور/الحفظ/...
+  let dataStart = 2;  // أول صف بيانات
 
-  // ── 1. اكتشاف عمود الاسم ────────────────────────────────
+  for (let r = 0; r < Math.min(5, rawRows.length); r++) {
+    const row     = rawRows[r] || [];
+    const rowText = row.join(" ");
+
+    // هل هذا الصف يحتوي على اسم أسبوع؟
+    if (weekRow === -1 && row.some((c) => isWeekName(String(c || "").trim()))) {
+      weekRow = r;
+    }
+    // هل هذا الصف يحتوي على عناوين الأعمدة؟
+    if (headerRow === -1 && (
+      rowText.includes("الحضور") || rowText.includes("حضور") ||
+      rowText.includes("الحفظ")  || rowText.includes("النسبة")
+    )) {
+      headerRow = r;
+    }
+  }
+
+  // إذا ما لقينا → افتراضي
+  if (weekRow   === -1) weekRow   = 0;
+  if (headerRow === -1) headerRow = weekRow + 1;
+  dataStart = Math.max(weekRow, headerRow) + 1;
+
+  const row0 = rawRows[weekRow]   || [];
+  const row1 = rawRows[headerRow] || [];
+
+  // ── اكتشاف عمود الاسم ──────────────────────────────────
   let nameCol = 1;
   for (let c = 0; c < row1.length; c++) {
     const cell = String(row1[c] || "").trim();
     if (cell === "الاسم" || cell === "اسم الطالب" || cell === "الطالب") {
       nameCol = c;
       break;
+    }
+  }
+  // إذا ما لقينا في headerRow، ابحث في weekRow
+  if (nameCol === 1) {
+    for (let c = 0; c < row0.length; c++) {
+      const cell = String(row0[c] || "").trim();
+      if (cell === "الاسم" || cell === "اسم الطالب" || cell === "الطالب") {
+        nameCol = c;
+        break;
+      }
     }
   }
 
@@ -129,22 +168,18 @@ export function transformWideToStructured(rawRows, monthLabel) {
   });
 
   // ── 3. قراءة صف TRUE/FALSE لكل أسبوع ───────────────────
-  // نبحث عن الصف الذي يحتوي على كلمة "تفعيل" أو TRUE/FALSE
-  // في عمود الاسم أو العمود الأول بعد الاسم
-  const enabledWeeks = new Set(); // أسماء الأسابيع المفعّلة فقط
+  const enabledWeeks = new Set();
 
-  for (let r = rawRows.length - 1; r >= 2; r--) {
+  for (let r = rawRows.length - 1; r >= dataStart; r--) {
     const row       = rawRows[r];
     const firstCell = String(row[nameCol] || "").trim().toLowerCase();
 
-    // هل هذا الصف هو صف التفعيل؟
     const isToggleRow =
-      firstCell === "تفعيل"    ||
+      firstCell === "تفعيل"         ||
       firstCell === "تفعيل الأسبوع" ||
-      firstCell === "إظهار"    ||
-      firstCell === "show"     ||
-      firstCell === "enable"   ||
-      // أو إذا كانت قيمة أول خلية من بيانات الأسبوع true/false
+      firstCell === "إظهار"         ||
+      firstCell === "show"          ||
+      firstCell === "enable"        ||
       weekHeaders.some((wh) => {
         const v = String(row[wh.colStart] || "").trim().toLowerCase();
         return v === "true" || v === "false";
@@ -152,26 +187,19 @@ export function transformWideToStructured(rawRows, monthLabel) {
 
     if (isToggleRow) {
       weekHeaders.forEach(({ weekName, colStart }) => {
-        // نقرأ قيمة الخلية في عمود بداية الأسبوع
         const raw = String(row[colStart] || "").trim().toLowerCase();
-        const isEnabled =
-          raw === "true"  ||
-          raw === "1"     ||
-          raw === "نعم"   ||
-          raw === "yes";
+        const isEnabled = raw === "true" || raw === "1" || raw === "نعم" || raw === "yes";
         if (isEnabled) enabledWeeks.add(weekName);
       });
-      break; // وجدنا الصف، نكتفي
+      break;
     }
   }
 
-  // إذا لم نجد أي صف تفعيل → نرجع للمنطق القديم (كل أسبوع فيه بيانات = مفعّل)
   const hasToggleRow = enabledWeeks.size > 0;
 
-  // ── 4. فلترة الأسابيع: لازم يكون TRUE **وفيه بيانات فعلية غير صفر** ──
-  // نتحقق من وجود بيانات فعلية بفحص صفوف البيانات مسبقاً
+  // ── 4. فلترة الأسابيع: TRUE + فيه بيانات فعلية ──────────
   const weeksWithRealData = new Set();
-  for (let r = 2; r < rawRows.length; r++) {
+  for (let r = dataStart; r < rawRows.length; r++) {
     const row  = rawRows[r];
     const name = String(row[nameCol] || "").trim();
     if (!name || isSummaryRow(name) || /^\d+$/.test(name)) continue;
@@ -189,7 +217,7 @@ export function transformWideToStructured(rawRows, monthLabel) {
 
   // ── 5. تحويل بيانات الطلاب للأسابيع المفعّلة فقط ────────
   const structured = [];
-  for (let r = 2; r < rawRows.length; r++) {
+  for (let r = dataStart; r < rawRows.length; r++) {
     const row  = rawRows[r];
     const name = String(row[nameCol] || "").trim();
     if (!name || isSummaryRow(name) || /^\d+$/.test(name)) continue;
