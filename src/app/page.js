@@ -121,10 +121,10 @@ export default function Dashboard() {
     const average   = students.filter((s) => s.displayPct >= 50 && s.displayPct < 80).length;
     const weak      = students.filter((s) => s.displayPct > 0  && s.displayPct < 50).length;
 
-    // أفضل 3
+    // أفضل 5
     const top3 = [...students]
       .sort((a, b) => b.displayPct - a.displayPct)
-      .slice(0, 3)
+      .slice(0, 5)
       .map((s) => ({ name: s.name, percentage: s.displayPct }));
 
     // بيانات الرسم البياني
@@ -243,7 +243,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── الرسم + أفضل 3 ───────────────────────────── */}
+        {/* ── الرسم + أفضل 5 ───────────────────────────── */}
         <div className="lg-grid">
           <div className="card anim-fade-up d2" style={{ padding:"1.5rem" }}>
             <h2 style={{ fontFamily:"Cairo, sans-serif",fontSize:14,fontWeight:600,marginBottom:"1.25rem",display:"flex",alignItems:"center",gap:8 }}>
@@ -286,11 +286,11 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* أفضل 3 */}
+          {/* أفضل 5 */}
           <div className="card anim-fade-up d3" style={{ padding:"1.5rem" }}>
             <h2 style={{ fontFamily:"Cairo, sans-serif",fontSize:14,fontWeight:600,marginBottom:"1.25rem",display:"flex",alignItems:"center",gap:8 }}>
               <Star size={16} color="#f59e0b" fill="#f59e0b"/>
-              أفضل 3 طلاب
+              أفضل 5 طلاب
             </h2>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               {filtered?.top3?.map((s,i)=>(
@@ -360,7 +360,7 @@ function KpiCard({ icon, label, value, accent, delay }) {
 }
 
 function Top3Row({ student, rank, onClick }) {
-  const rankColors = ["#f59e0b","#94a3b8","#b45309"];
+  const rankColors = ["#f59e0b","#94a3b8","#b45309","#6366f1","#10b981"];
   const c   = rankColors[rank-1];
   const pct = student.percentage ?? 0;
   const st  = STATUS[getStatus(pct)];
