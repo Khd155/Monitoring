@@ -18,7 +18,20 @@ function fmt(pct) {
   return Number.isInteger(n) ? `${n}%` : `${n.toFixed(2)}%`;
 }
 
-// ── Helpers ───────────────────────────────────────────────
+// ── تحويل اسم الأسبوع لرقم ───────────────────────────────
+function weekLabel(name) {
+  const nums = {
+    الأول:1, الثاني:2, الثالث:3, الرابع:4, الخامس:5,
+    السادس:6, السابع:7, الثامن:8, التاسع:9, العاشر:10,
+    "الحادي عشر":11, "الثاني عشر":12, "الثالث عشر":13,
+    "الرابع عشر":14, "الخامس عشر":15,
+  };
+  for (const [w, n] of Object.entries(nums)) {
+    if (name.includes(w)) return String(n);
+  }
+  const m = name.match(/\d+/);
+  return m ? m[0] : name.replace(/الأسبوع\s*/g, "").trim();
+}
 const STATUS = {
   excellent: { label: "ممتاز",        color: "#10b981", dim: "rgba(16,185,129,0.12)" },
   average:   { label: "متوسط",        color: "#f59e0b", dim: "rgba(245,158,11,0.12)" },
@@ -67,12 +80,15 @@ export default function StudentPage() {
     </div>
   );
 
-  // ── الأسابيع المفعّلة فقط (نسبتها > 0 وفيها بيانات) ────────
-  const activeWeeks = student.weeks.filter((w) => w.hasData && w.percentage > 0);
+  // ── كل الأسابيع المفعّلة — للعرض والإحصائيات
+  const allStudentWeeks = student.weeks.filter((w) => w.hasData);
 
-  // المتوسط = مجموع نسب الأسابيع المفعّلة ÷ عددها (منزلتان عشريتان)
-  const avgPctRaw = activeWeeks.length
-    ? activeWeeks.reduce((s, w) => s + w.percentage, 0) / activeWeeks.length
+  // ── الأسابيع المرصودة فقط — للرسم البياني (لا نرسم الأصفار)
+  const activeWeeks = allStudentWeeks.filter((w) => w.percentage > 0);
+
+  // المتوسط = مجموع كل الأسابيع المفعّلة ÷ عددها (الصفر يُحسب)
+  const avgPctRaw = allStudentWeeks.length
+    ? allStudentWeeks.reduce((s, w) => s + w.percentage, 0) / allStudentWeeks.length
     : 0;
   const avgPct = Math.round(avgPctRaw * 100) / 100;
 
@@ -81,7 +97,7 @@ export default function StudentPage() {
   const ringPct = Math.min(100, avgPct); // للـ ring فقط
   const r     = 44, circ = 2 * Math.PI * r, fill = (ringPct / 100) * circ;
 
-  // الرسم البياني — فقط الأسابيع المفعّلة
+  // الرسم البياني — كل الأسابيع المفعّلة (بما فيها الصفر)
   const chartData = activeWeeks.map((w) => ({
     week:     w.week.replace(/الأسبوع\s+/, ""),
     pct:      Math.round(w.percentage * 100) / 100,
@@ -89,14 +105,14 @@ export default function StudentPage() {
   }));
 
   // اتجاه التطور (آخر أسبوعين مفعّلين)
-  const last2      = activeWeeks.slice(-2);
+  const last2      = allStudentWeeks.slice(-2);
   const trendRaw   = last2.length === 2 ? last2[1].percentage - last2[0].percentage : 0;
   const trend      = Math.round(trendRaw * 100) / 100;
   const TrendIcon  = trend > 0 ? TrendingUp : trend < 0 ? TrendingDown : Minus;
   const trendColor = trend > 0 ? "#10b981"  : trend < 0 ? "#ef4444"   : "var(--text-3)";
 
-  // إحصائيات الأسابيع المفعّلة فقط
-  const allPcts = activeWeeks.map((w) => w.percentage);
+  // إحصائيات من كل الأسابيع المفعّلة
+  const allPcts = allStudentWeeks.map((w) => w.percentage);
   const maxPct  = allPcts.length ? Math.round(Math.max(...allPcts) * 100) / 100 : 0;
   const minPct  = allPcts.length ? Math.round(Math.min(...allPcts) * 100) / 100 : 0;
 
@@ -157,7 +173,7 @@ export default function StudentPage() {
                 <MiniStat label="المتوسط"  value={fmt(avgPct)}          color="#4f8ef7" />
                 <MiniStat label="الأعلى"   value={fmt(maxPct)}          color="#10b981" />
                 <MiniStat label="الأدنى"   value={fmt(minPct)}          color="#ef4444" />
-                <MiniStat label="الأسابيع" value={activeWeeks.length}   color="var(--text-2)" />
+                <MiniStat label="الأسابيع" value={allStudentWeeks.length} color="var(--text-2)" />
                 <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "10px 12px" }}>
                   <p style={{ color: "var(--text-3)", fontSize: 11, marginBottom: 4 }}>الاتجاه</p>
                   <p style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "Cairo", fontWeight: 700, fontSize: 14, color: trendColor }}>
@@ -199,9 +215,12 @@ export default function StudentPage() {
           <h2 style={{ fontFamily: "Cairo, sans-serif", fontSize: 14, fontWeight: 600, marginBottom: "1rem", display: "flex", alignItems: "center", gap: 8 }}>
             <Calendar size={16} color="#4f8ef7" />
             تفاصيل كل أسبوع
+            <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "Tajawal", fontWeight: 400 }}>
+              ({allStudentWeeks.length} أسبوع)
+            </span>
           </h2>
           <div className="weeks-grid">
-            {student.weeks.map((week, i) => (
+            {allStudentWeeks.map((week, i) => (
               <WeekCard key={week.week} week={week} delay={`d${Math.min(i % 6 + 1, 6)}`} />
             ))}
           </div>
@@ -226,13 +245,65 @@ function MiniStat({ label, value, color }) {
 function WeekCard({ week, delay }) {
   const pct    = week.percentage ?? 0;
   const st     = STATUS[getStatus(pct)];
-  const barPct = Math.min(100, pct); // progress bar لا يتجاوز 100%
+  const barPct = Math.min(100, pct);
   const fields = [
     { label: "الحضور", val: week.attendance, icon: "👤" },
     { label: "الحفظ",  val: week.hifz,       icon: "📖" },
     { label: "الصغرى", val: week.sughra,     icon: "📝" },
     { label: "الكبرى", val: week.kubra,      icon: "📋" },
   ];
+
+  // كل القيم أصفار أو فارغة = لم يُرصد بعد
+  const isUnrecorded = pct === 0 &&
+    [week.attendance, week.hifz, week.sughra, week.kubra]
+      .every((v) => v === null || v === 0);
+
+  if (isUnrecorded) {
+    return (
+      <div className={`card anim-fade-up ${delay}`} style={{ padding: "1.25rem", position: "relative", overflow: "hidden" }}>
+        {/* البيانات في الخلفية */}
+        <div style={{ opacity: 0.60
+         }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <span style={{ fontFamily: "Cairo, sans-serif", fontWeight: 600, fontSize: 13, color: "var(--text-2)" }}>
+              {week.week}
+            </span>
+            <span style={{ fontFamily: "Cairo, sans-serif", fontWeight: 800, fontSize: 16, color: "var(--text-3)" }}>
+              0%
+            </span>
+          </div>
+          <div style={{ height: 5, borderRadius: 99, background: "var(--rim)", marginBottom: 14 }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {fields.map(({ label, val, icon }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--surface-2)", borderRadius: 8, padding: "6px 10px" }}>
+                <span style={{ fontSize: 14 }}>{icon}</span>
+                <div>
+                  <p style={{ fontSize: 10, color: "var(--text-3)" }}>{label}</p>
+                  <p style={{ fontFamily: "Cairo", fontWeight: 700, fontSize: 14 }}>{val ?? 0}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* طبقة "لم يُرصد" فوق البيانات */}
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 8,
+          background: "rgba(13,17,23,0.55)",
+          backdropFilter: "blur(2px)",
+          borderRadius: 14,
+        }}>
+          <span style={{ fontSize: 26 }}>⏳</span>
+          <span style={{ fontFamily: "Cairo, sans-serif", fontWeight: 600, fontSize: 12, color: "var(--text-2)" }}>
+            لم يُرصد بعد
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`card anim-fade-up ${delay}`} style={{ padding: "1.25rem" }}>

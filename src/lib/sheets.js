@@ -138,15 +138,16 @@ export function transformWideToStructured(rawRows, monthLabel) {
 
   // لكل أسبوع: نحدد أين تبدأ أعمدته الـ 5 بالبحث عن العناوين في row1
   const colNames = {
-    "الحضور": "attendance", "حضور": "attendance",
-    "الحفظ":  "hifz",       "حفظ":  "hifz",
-    "الصغرى": "sughra",     "صغرى": "sughra",
-    "الكبرى": "kubra",      "كبرى": "kubra",
-    "النسبة": "percentage", "نسبة": "percentage", "النسبه": "percentage",
+    "الحضور":   "attendance", "حضور":  "attendance",
+    "الحفظ":    "hifz",       "حفظ":   "hifz",
+    "الصغرى":   "sughra",     "صغرى":  "sughra",
+    "الكبرى":   "kubra",      "كبرى":  "kubra",
+    "النسبة":   "percentage", "نسبة":  "percentage",
+    "النسبه":   "percentage", // خطأ إملائي شائع
   };
 
   const weekHeaders = rawWeekCols.map(({ weekName, col }) => {
-    // ابحث في نطاق ±1 من موقع اسم الأسبوع لإيجاد أعمدة البيانات
+    // الافتراضي: الحضور أول عمود، النسبة خامس عمود
     const colOrder = {
       attendance: col,
       hifz:       col + 1,
@@ -155,11 +156,11 @@ export function transformWideToStructured(rawRows, monthLabel) {
       percentage: col + 4,
     };
 
-    // نبحث في نطاق -4 إلى +5 من موقع اسم الأسبوع
-    for (let o = -4; o <= 5; o++) {
+    // نبحث للأمام فقط (0 إلى +4) — نطاق الأسبوع الواحد بالضبط
+    // نستخدم trim() لتجاهل المسافات الزيادة مثل "النسبة "
+    for (let o = 0; o <= 4; o++) {
       const c = col + o;
-      if (c < 0) continue;
-      const v = String(row1[c] || "").trim();
+      const v = String(row1[c] || "").trim(); // trim هنا يحل مشكلة المسافة
       const mapped = colNames[v];
       if (mapped) colOrder[mapped] = c;
     }
@@ -197,7 +198,9 @@ export function transformWideToStructured(rawRows, monthLabel) {
 
   const hasToggleRow = enabledWeeks.size > 0;
 
-  // ── 4. فلترة الأسابيع: TRUE + فيه بيانات فعلية ──────────
+  // ── 4. فلترة الأسابيع ────────────────────────────────────
+  // activeWeeks = الأسابيع المفعّلة (TRUE) — تظهر حتى لو لم تُرصد بعد
+  // weeksWithData = الأسابيع المفعّلة التي فيها بيانات > 0 — تُستخدم في الإحصائيات
   const weeksWithRealData = new Set();
   for (let r = dataStart; r < rawRows.length; r++) {
     const row  = rawRows[r];
@@ -210,9 +213,10 @@ export function transformWideToStructured(rawRows, monthLabel) {
   }
 
   const activeWeeks = weekHeaders.filter((wh) => {
-    const toggleOk = !hasToggleRow || enabledWeeks.has(wh.weekName); // TRUE أو لا يوجد صف تفعيل
-    const dataOk   = weeksWithRealData.has(wh.weekName);             // فيه بيانات حقيقية
-    return toggleOk && dataOk;
+    // إذا فيه صف تفعيل: أظهر كل الأسابيع التي عليها TRUE (حتى لو لم تُرصد)
+    // إذا ما فيه صف تفعيل: أظهر فقط الأسابيع التي فيها بيانات
+    if (hasToggleRow) return enabledWeeks.has(wh.weekName);
+    return weeksWithRealData.has(wh.weekName);
   });
 
   // ── 5. تحويل بيانات الطلاب للأسابيع المفعّلة فقط ────────
@@ -229,9 +233,9 @@ export function transformWideToStructured(rawRows, monthLabel) {
       const kubra      = parseValue(row[colOrder.kubra]);
       const percentage = parsePercentage(row[colOrder.percentage]);
 
-      // البيانات "حقيقية" فقط إذا كانت النسبة > 0
-      // الحضور وحده بصفر لا يكفي لاعتبار الأسبوع مرصوداً
-      const hasData = percentage !== null && percentage > 0;
+      // كل أسبوع مفعّل (TRUE) يُعتبر موجوداً حتى لو نسبته 0
+      const hasData = true;
+      const pct     = percentage ?? 0;
 
       structured.push({
         name,
@@ -239,8 +243,9 @@ export function transformWideToStructured(rawRows, monthLabel) {
         week: weekName,
         weekOrder: extractWeekOrder(weekName),
         attendance, hifz, sughra, kubra,
-        percentage: hasData ? percentage : 0,
+        percentage: pct,
         hasData,
+        isRecorded: pct > 0, // علامة: هل رُصد فعلاً أم لا
       });
     });
   }
@@ -264,12 +269,14 @@ export function buildStudentsFromStructured(records) {
       ((monthOrder[a.month] || 0) - (monthOrder[b.month] || 0)) || (a.weekOrder - b.weekOrder)
     );
 
-    const validPcts = student.weeks
+    // كل الأسابيع المفعّلة تدخل في الحساب — الصفر يعني لم يُرصد لكن يُحسب
+    const activePcts = student.weeks
       .filter((w) => w.hasData)
-      .map((w) => w.percentage)
-      .filter((p) => p > 0);
+      .map((w) => w.percentage);
 
-    const avgPct     = validPcts.length ? Math.round(validPcts.reduce((s, v) => s + v, 0) / validPcts.length) : 0;
+    const avgPct     = activePcts.length
+      ? Math.round((activePcts.reduce((s, v) => s + v, 0) / activePcts.length) * 100) / 100
+      : 0;
     const latestData = [...student.weeks].reverse().find((w) => w.hasData);
     const currentPct = latestData?.percentage ?? 0;
 
@@ -313,33 +320,41 @@ export async function getProcessedData() {
     if (seen.has(key)) return;
     seen.add(key);
 
-    const weekRecs = allStructured.filter((r) => r.week === rec.week && r.month === rec.month && r.hasData);
-    const nonZero  = weekRecs.filter((r) => r.percentage > 0);
+    const weekRecs  = allStructured.filter((r) => r.week === rec.week && r.month === rec.month && r.hasData);
+    const nonZero   = weekRecs.filter((r) => r.percentage > 0);
+    const allPcts   = weekRecs.map((r) => r.percentage); // يشمل الأصفار
+    const avg       = allPcts.length ? Math.round((allPcts.reduce((s, v) => s + v, 0) / allPcts.length) * 100) / 100 : 0;
+    const isRecorded = nonZero.length > 0;
 
-    // ← تجاهل الأسبوع كلياً إذا كان الجميع صفر (لم يُرصد بعد)
-    if (nonZero.length === 0) return;
-
-    const pcts = nonZero.map((r) => r.percentage);
-    const avg  = Math.round(pcts.reduce((s, v) => s + v, 0) / pcts.length);
+    // لا نتجاهل الأسابيع غير المرصودة — تظهر في كل مكان بنسبة 0
 
     weekStats.push({
       week: rec.week, month: rec.month, key,
       weekLabel: `${rec.month} — ${rec.week}`,
+      isRecorded,
       avg,
-      excellent:      pcts.filter((p) => p >= 80).length,
-      average:        pcts.filter((p) => p >= 50 && p < 80).length,
-      needsAttention: pcts.filter((p) => p > 0 && p < 50).length,
+      excellent:      allPcts.filter((p) => p >= 80).length,
+      average:        allPcts.filter((p) => p >= 50 && p < 80).length,
+      needsAttention: allPcts.filter((p) => p > 0 && p < 50).length,
+      weak:           allPcts.filter((p) => p === 0).length, // لم يُرصد
       top3: [...nonZero].sort((a, b) => b.percentage - a.percentage).slice(0, 5)
         .map((r) => ({ name: r.name, percentage: r.percentage })),
     });
   });
 
-  // أسابيع كل شهر — فقط الأسابيع المرصودة
+  // أسابيع كل شهر — كل الأسابيع المفعّلة (مرصودة + غير مرصودة)
+  // نستخرجها من allStructured لأنها تشمل الأسابيع الـ TRUE كلها
   const weeksByMonth = {};
   availableMonths.forEach(({ label }) => {
-    weeksByMonth[label] = weekStats
-      .filter((ws) => ws.month === label)
-      .map((ws) => ws.week);
+    const seen2 = new Map();
+    allStructured
+      .filter((r) => r.month === label)
+      .forEach((r) => {
+        if (!seen2.has(r.week)) seen2.set(r.week, r.weekOrder);
+      });
+    weeksByMonth[label] = [...seen2.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .map(([week]) => week);
   });
 
   return { students, structured: allStructured, availableMonths, weeksByMonth, weekStats };
