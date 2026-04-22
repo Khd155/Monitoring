@@ -228,7 +228,10 @@ export function transformWideToStructured(rawRows, monthLabel) {
       const sughra     = parseValue(row[colOrder.sughra]);
       const kubra      = parseValue(row[colOrder.kubra]);
       const percentage = parsePercentage(row[colOrder.percentage]);
-      const hasData    = [attendance, hifz, sughra, kubra, percentage].some((v) => v !== null);
+
+      // البيانات "حقيقية" فقط إذا كانت النسبة > 0
+      // الحضور وحده بصفر لا يكفي لاعتبار الأسبوع مرصوداً
+      const hasData = percentage !== null && percentage > 0;
 
       structured.push({
         name,
@@ -236,7 +239,7 @@ export function transformWideToStructured(rawRows, monthLabel) {
         week: weekName,
         weekOrder: extractWeekOrder(weekName),
         attendance, hifz, sughra, kubra,
-        percentage: hasData ? (percentage ?? 0) : 0,
+        percentage: hasData ? percentage : 0,
         hasData,
       });
     });
