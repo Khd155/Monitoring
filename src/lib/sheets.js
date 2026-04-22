@@ -88,17 +88,45 @@ export function transformWideToStructured(rawRows, monthLabel) {
   }
 
   // ── 2. اكتشاف الأسابيع وأعمدتها ────────────────────────
-  const weekHeaders = [];
+  // نجمع أولاً كل مواقع أسماء الأسابيع
+  const rawWeekCols = [];
   for (let c = nameCol + 1; c < row0.length; c++) {
     const cell = String(row0[c] || "").trim();
     if (cell && isWeekName(cell)) {
-      weekHeaders.push({
-        weekName: cell,
-        colStart: c,
-        colOrder: detectColumnOrder(row1, c),
-      });
+      rawWeekCols.push({ weekName: cell, col: c });
     }
   }
+
+  // لكل أسبوع: نحدد أين تبدأ أعمدته الـ 5 بالبحث عن العناوين في row1
+  const colNames = {
+    "الحضور": "attendance", "حضور": "attendance",
+    "الحفظ":  "hifz",       "حفظ":  "hifz",
+    "الصغرى": "sughra",     "صغرى": "sughra",
+    "الكبرى": "kubra",      "كبرى": "kubra",
+    "النسبة": "percentage", "نسبة": "percentage", "النسبه": "percentage",
+  };
+
+  const weekHeaders = rawWeekCols.map(({ weekName, col }) => {
+    // ابحث في نطاق ±1 من موقع اسم الأسبوع لإيجاد أعمدة البيانات
+    const colOrder = {
+      attendance: col,
+      hifz:       col + 1,
+      sughra:     col + 2,
+      kubra:      col + 3,
+      percentage: col + 4,
+    };
+
+    // نبحث في نطاق -4 إلى +5 من موقع اسم الأسبوع
+    for (let o = -4; o <= 5; o++) {
+      const c = col + o;
+      if (c < 0) continue;
+      const v = String(row1[c] || "").trim();
+      const mapped = colNames[v];
+      if (mapped) colOrder[mapped] = c;
+    }
+
+    return { weekName, colStart: col, colOrder };
+  });
 
   // ── 3. قراءة صف TRUE/FALSE لكل أسبوع ───────────────────
   // نبحث عن الصف الذي يحتوي على كلمة "تفعيل" أو TRUE/FALSE
@@ -302,13 +330,49 @@ export const STATUS_CONFIG = {
 };
 
 function detectColumnOrder(headerRow, colStart) {
-  const defaults = { attendance: colStart, hifz: colStart+1, sughra: colStart+2, kubra: colStart+3, percentage: colStart+4 };
-  const colNames = { الحضور: "attendance", الحفظ: "hifz", الصغرى: "sughra", الكبرى: "kubra", النسبة: "percentage" };
+  // الترتيب الافتراضي: حضور(+0) حفظ(+1) صغرى(+2) كبرى(+3) نسبة(+4)
+  const defaults = {
+    attendance: colStart,
+    hifz:       colStart + 1,
+    sughra:     colStart + 2,
+    kubra:      colStart + 3,
+    percentage: colStart + 4,
+  };
+
+  const colNames = {
+    "الحضور": "attendance", "حضور": "attendance",
+    "الحفظ":  "hifz",       "حفظ":  "hifz",
+    "الصغرى": "sughra",     "صغرى": "sughra",
+    "الكبرى": "kubra",      "كبرى": "kubra",
+    "النسبة": "percentage", "نسبة": "percentage", "النسبه": "percentage",
+  };
+
   const result = { ...defaults };
+  let foundCount = 0;
+
+  // نبحث في نطاق 6 أعمدة ابتداءً من colStart
   for (let o = 0; o < 6; o++) {
-    const v = String(headerRow[colStart + o] || "").trim();
-    if (colNames[v]) result[colNames[v]] = colStart + o;
+    const colIdx  = colStart + o;
+    const cellVal = String(headerRow[colIdx] || "").trim();
+    const mapped  = colNames[cellVal];
+    if (mapped) {
+      result[mapped] = colIdx;
+      foundCount++;
+    }
   }
+
+  // إذا ما لقينا العناوين → جرب البحث قبل colStart (الجدول معكوس)
+  // مثال: النسبة أول عمود ثم الكبرى ثم الصغرى ثم الحفظ ثم الحضور
+  if (foundCount < 3) {
+    for (let o = -4; o < 6; o++) {
+      const colIdx  = colStart + o;
+      if (colIdx < 0) continue;
+      const cellVal = String(headerRow[colIdx] || "").trim();
+      const mapped  = colNames[cellVal];
+      if (mapped) result[mapped] = colIdx;
+    }
+  }
+
   return result;
 }
 
