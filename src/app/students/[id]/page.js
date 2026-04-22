@@ -83,7 +83,7 @@ export default function StudentPage() {
 
   // الرسم البياني — فقط الأسابيع المفعّلة
   const chartData = activeWeeks.map((w) => ({
-    week:     w.week.replace(/الأسبوع\s+/, "أ"),
+    week:     w.week.replace(/الأسبوع\s+/, ""),
     pct:      Math.round(w.percentage * 100) / 100,
     fullWeek: w.week,
   }));
