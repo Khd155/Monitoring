@@ -80,11 +80,11 @@ export default function StudentPage() {
     </div>
   );
 
-  // ── كل الأسابيع المفعّلة — للعرض والإحصائيات
-  const allStudentWeeks = student.weeks.filter((w) => w.hasData);
+  // ── كل الأسابيع المفعّلة (مرصودة + غير مرصودة بصفر)
+  const allStudentWeeks = student.weeks; // لا فلتر — كلها تُحسب
 
-  // ── الأسابيع المرصودة فقط — للرسم البياني (لا نرسم الأصفار)
-  const activeWeeks = allStudentWeeks.filter((w) => w.percentage > 0);
+  // ── الأسابيع المرصودة فقط (للمقارنة إذا احتجنا)
+  const activeWeeks = student.weeks.filter((w) => w.percentage > 0);
 
   // المتوسط = مجموع كل الأسابيع المفعّلة ÷ عددها (الصفر يُحسب)
   const avgPctRaw = allStudentWeeks.length
@@ -98,9 +98,9 @@ export default function StudentPage() {
   const r     = 44, circ = 2 * Math.PI * r, fill = (ringPct / 100) * circ;
 
   // الرسم البياني — كل الأسابيع المفعّلة (بما فيها الصفر)
-  const chartData = activeWeeks.map((w) => ({
+  const chartData = allStudentWeeks.map((w) => ({
     week:     w.week.replace(/الأسبوع\s+/, ""),
-    pct:      Math.round(w.percentage * 100) / 100,
+    pct:      Math.round((w.percentage ?? 0) * 100) / 100,
     fullWeek: w.week,
   }));
 
@@ -262,8 +262,7 @@ function WeekCard({ week, delay }) {
     return (
       <div className={`card anim-fade-up ${delay}`} style={{ padding: "1.25rem", position: "relative", overflow: "hidden" }}>
         {/* البيانات في الخلفية */}
-        <div style={{ opacity: 0.60
-         }}>
+        <div style={{ opacity: 0.25 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <span style={{ fontFamily: "Cairo, sans-serif", fontWeight: 600, fontSize: 13, color: "var(--text-2)" }}>
               {week.week}

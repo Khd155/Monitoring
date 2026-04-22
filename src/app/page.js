@@ -20,6 +20,22 @@ function fmt(pct) {
   return Number.isInteger(n) ? `${n}%` : `${n.toFixed(2)}%`;
 }
 
+// ── تحويل اسم الأسبوع لرقم للرسم البياني ────────────────────
+// "الأسبوع الثامن" → "8" | "الأسبوع 8" → "8"
+function weekLabel(name) {
+  const nums = {
+    الأول:1, الثاني:2, الثالث:3, الرابع:4, الخامس:5,
+    السادس:6, السابع:7, الثامن:8, التاسع:9, العاشر:10,
+    "الحادي عشر":11, "الثاني عشر":12, "الثالث عشر":13,
+    "الرابع عشر":14, "الخامس عشر":15,
+  };
+  for (const [w, n] of Object.entries(nums)) {
+    if (name.includes(w)) return String(n);
+  }
+  const m = name.match(/\d+/);
+  return m ? m[0] : name.replace(/الأسبوع\s*/g, "").trim();
+}
+
 // ── Status helpers ───────────────────────────────────────────
 const STATUS = {
   excellent: { label: "ممتاز",        color: "#10b981", dim: "rgba(16,185,129,0.12)" },
@@ -121,15 +137,28 @@ export default function Dashboard() {
     const average   = students.filter((s) => s.displayPct >= 50 && s.displayPct < 80).length;
     const weak      = students.filter((s) => s.displayPct > 0  && s.displayPct < 50).length;
 
-    // أفضل 5
-    const top3 = [...students]
-      .sort((a, b) => b.displayPct - a.displayPct)
-      .slice(0, 5)
-      .map((s) => ({ name: s.name, percentage: s.displayPct }));
+    // أفضل 5 مراكز — كل مركز قد يحتوي أكثر من شخص
+    const sorted = [...students].sort((a, b) => b.displayPct - a.displayPct);
+
+    // نجمع المراكز الخمسة الأولى مع كل الطلاب فيها
+    const top3 = [];
+    let currentRank = 0;
+    let distinctRanks = 0;
+    let prevPct = null;
+
+    for (const s of sorted) {
+      if (s.displayPct !== prevPct) {
+        distinctRanks++;
+        currentRank = top3.length + 1; // المركز الحقيقي بعد كل المتساوين قبله
+        prevPct = s.displayPct;
+      }
+      if (distinctRanks > 5) break; // توقف بعد 5 مراكز مختلفة
+      top3.push({ name: s.name, percentage: s.displayPct, rank: distinctRanks });
+    }
 
     // بيانات الرسم البياني
     const chartData = weekStatsList.map((ws) => ({
-      week:  ws.week.replace(/الأسبوع\s+/, ""),
+      week:  weekLabel(ws.week),
       avg:   ws.avg,
       key:   ws.key,
       month: ws.month,
@@ -293,8 +322,8 @@ export default function Dashboard() {
               أفضل 5 طلاب
             </h2>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              {filtered?.top3?.map((s,i)=>(
-                <Top3Row key={s.name} student={s} rank={i+1}
+              {filtered?.top3?.map((s)=>(
+                <Top3Row key={s.name} student={s} rank={s.rank}
                   onClick={()=>router.push(`/students/${encodeURIComponent(s.name)}`)}/>
               ))}
               {!filtered?.top3?.length && (
@@ -361,10 +390,10 @@ function KpiCard({ icon, label, value, accent, delay }) {
 
 function Top3Row({ student, rank, onClick }) {
   const rankColors = ["#f59e0b","#94a3b8","#b45309","#6366f1","#10b981"];
-  const c   = rankColors[rank-1];
+  // إذا المركز > 5 (بسبب التساوي) نستخدم آخر لون
+  const c   = rankColors[Math.min(rank, rankColors.length) - 1];
   const pct = student.percentage ?? 0;
   const st  = STATUS[getStatus(pct)];
-  // نستخدم Math.min(100, pct) للـ progress bar فقط
   const barWidth = Math.min(100, pct);
   return (
     <div onClick={onClick}

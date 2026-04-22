@@ -190,6 +190,7 @@ export function transformWideToStructured(rawRows, monthLabel) {
       weekHeaders.forEach(({ weekName, colStart }) => {
         const raw = String(row[colStart] || "").trim().toLowerCase();
         const isEnabled = raw === "true" || raw === "1" || raw === "نعم" || raw === "yes";
+        console.log(`[تفعيل] ${weekName} col=${colStart} val="${raw}" → ${isEnabled ? "✅ مفعّل" : "❌ معطّل"}`);
         if (isEnabled) enabledWeeks.add(weekName);
       });
       break;
