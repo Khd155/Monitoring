@@ -129,7 +129,7 @@ export default function Dashboard() {
 
     // بيانات الرسم البياني
     const chartData = weekStatsList.map((ws) => ({
-      week:  ws.week.replace(/الأسبوع\s+/, "أ"),
+      week:  ws.week.replace(/الأسبوع\s+/, ""),
       avg:   ws.avg,
       key:   ws.key,
       month: ws.month,
