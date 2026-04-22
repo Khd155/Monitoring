@@ -140,10 +140,24 @@ export function transformWideToStructured(rawRows, monthLabel) {
   // إذا لم نجد أي صف تفعيل → نرجع للمنطق القديم (كل أسبوع فيه بيانات = مفعّل)
   const hasToggleRow = enabledWeeks.size > 0;
 
-  // ── 4. فلترة الأسابيع المفعّلة فقط ──────────────────────
-  const activeWeeks = hasToggleRow
-    ? weekHeaders.filter((wh) => enabledWeeks.has(wh.weekName))
-    : weekHeaders; // لا يوجد صف تفعيل → نستخدم كلها (المنطق القديم يبقى)
+  // ── 4. فلترة الأسابيع: لازم يكون TRUE **وفيه بيانات فعلية غير صفر** ──
+  // نتحقق من وجود بيانات فعلية بفحص صفوف البيانات مسبقاً
+  const weeksWithRealData = new Set();
+  for (let r = 2; r < rawRows.length; r++) {
+    const row  = rawRows[r];
+    const name = String(row[nameCol] || "").trim();
+    if (!name || isSummaryRow(name) || /^\d+$/.test(name)) continue;
+    weekHeaders.forEach(({ weekName, colOrder }) => {
+      const pct = parsePercentage(row[colOrder.percentage]);
+      if (pct !== null && pct > 0) weeksWithRealData.add(weekName);
+    });
+  }
+
+  const activeWeeks = weekHeaders.filter((wh) => {
+    const toggleOk = !hasToggleRow || enabledWeeks.has(wh.weekName); // TRUE أو لا يوجد صف تفعيل
+    const dataOk   = weeksWithRealData.has(wh.weekName);             // فيه بيانات حقيقية
+    return toggleOk && dataOk;
+  });
 
   // ── 5. تحويل بيانات الطلاب للأسابيع المفعّلة فقط ────────
   const structured = [];
@@ -256,7 +270,7 @@ export async function getProcessedData() {
       excellent:      pcts.filter((p) => p >= 80).length,
       average:        pcts.filter((p) => p >= 50 && p < 80).length,
       needsAttention: pcts.filter((p) => p > 0 && p < 50).length,
-      top3: [...nonZero].sort((a, b) => b.percentage - a.percentage).slice(0, 3)
+      top3: [...nonZero].sort((a, b) => b.percentage - a.percentage).slice(0, 5)
         .map((r) => ({ name: r.name, percentage: r.percentage })),
     });
   });
