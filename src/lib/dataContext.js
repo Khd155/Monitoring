@@ -9,29 +9,29 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 const DataContext = createContext(null);
 
 export function DataProvider({ children }) {
-  const [data,      setData]      = useState(null);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
-  const [lastFetch, setLastFetch] = useState(null);
+  const [data,       setData]      = useState(null);
+  const [loading,    setLoading]   = useState(true);
+  const [refreshing, setRefreshing]= useState(false);
+  const [error,      setError]     = useState(null);
+  const [lastFetch,  setLastFetch] = useState(null);
   const fetchingRef = useRef(false); // منع الطلبات المتزامنة
 
-  const CACHE_MS = 5 * 60 * 1000; // 5 دقائق
+  const CACHE_MS = 30 * 1000; // 30 ثانية فقط
 
   const load = useCallback(async (force = false) => {
-    // إذا في طلب جاري → تجاهل
     if (fetchingRef.current) return;
-
-    // إذا البيانات موجودة ولم تنته صلاحيتها → تجاهل
     if (!force && data && lastFetch && Date.now() - lastFetch < CACHE_MS) return;
 
     fetchingRef.current = true;
-    setLoading(true);
+    if (force) setRefreshing(true);
+    setLoading(!data);
     setError(null);
 
     try {
-      const res  = await fetch("/api/students", {
-        // browser cache: يستخدم الكاش إذا لم يمر وقت كافٍ
-        next: { revalidate: 300 },
+      // cache-busting: نضيف timestamp لمنع المتصفح من كاش القديم
+      const res  = await fetch(`/api/students?t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -42,17 +42,17 @@ export function DataProvider({ children }) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
       fetchingRef.current = false;
     }
   }, [data, lastFetch]);
 
-  // جلب البيانات مرة واحدة عند التحميل
   useEffect(() => { load(); }, []);
 
-  const refresh = () => load(true); // تحديث يدوي
+  const refresh = () => load(true);
 
   return (
-    <DataContext.Provider value={{ data, loading, error, refresh, lastFetch }}>
+    <DataContext.Provider value={{ data, loading, refreshing, error, refresh, lastFetch }}>
       {children}
     </DataContext.Provider>
   );
