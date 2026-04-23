@@ -162,11 +162,13 @@ export default function Dashboard() {
 
     // بيانات الرسم البياني
     const chartData = weekStatsList.map((ws) => ({
-      week:  weekLabel(ws.week),
-      avg:   ws.avg,
-      key:   ws.key,
-      month: ws.month,
-    }));
+  week: ws.week
+    .replace("الأسبوع", "")
+    .trim(),
+  avg: ws.avg,
+  key: ws.key,
+  month: ws.month,
+}));
 
     return { avg, excellent, average, weak, top3, chartData, students, total: students.length };
   }, [data, selMonth, selWeek]);
