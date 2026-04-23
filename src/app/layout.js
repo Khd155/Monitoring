@@ -19,7 +19,6 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
-        {/* DataProvider يجلب البيانات مرة واحدة ويشاركها بين كل الصفحات */}
         <DataProvider>
           {children}
         </DataProvider>

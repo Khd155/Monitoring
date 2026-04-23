@@ -99,7 +99,7 @@ export default function StudentPage() {
 
   // الرسم البياني — كل الأسابيع المفعّلة (بما فيها الصفر)
   const chartData = allStudentWeeks.map((w) => ({
-    week:     w.week.replace(/الأسبوع\s+/, ""),
+    week:     weekLabel(w.week),
     pct:      Math.round((w.percentage ?? 0) * 100) / 100,
     fullWeek: w.week,
   }));
@@ -262,7 +262,7 @@ function WeekCard({ week, delay }) {
     return (
       <div className={`card anim-fade-up ${delay}`} style={{ padding: "1.25rem", position: "relative", overflow: "hidden" }}>
         {/* البيانات في الخلفية */}
-        <div style={{ opacity: 0.65 }}>
+        <div style={{ opacity: 0.25 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <span style={{ fontFamily: "Cairo, sans-serif", fontWeight: 600, fontSize: 13, color: "var(--text-2)" }}>
               {week.week}

@@ -175,22 +175,40 @@ export function transformWideToStructured(rawRows, monthLabel) {
     const row       = rawRows[r];
     const firstCell = String(row[nameCol] || "").trim().toLowerCase();
 
+    // هل هذا الصف هو صف التفعيل؟
     const isToggleRow =
       firstCell === "تفعيل"         ||
       firstCell === "تفعيل الأسبوع" ||
       firstCell === "إظهار"         ||
       firstCell === "show"          ||
       firstCell === "enable"        ||
+      // checkbox: نبحث في أعمدة النسبة لكل أسبوع
       weekHeaders.some((wh) => {
-        const v = String(row[wh.colStart] || "").trim().toLowerCase();
-        return v === "true" || v === "false";
+        // نفحص كل أعمدة الأسبوع (0 إلى 4)
+        for (let o = 0; o <= 4; o++) {
+          const v = String(row[wh.colStart + o] || "").trim().toLowerCase();
+          if (v === "true" || v === "false") return true;
+        }
+        return false;
       });
 
     if (isToggleRow) {
-      weekHeaders.forEach(({ weekName, colStart }) => {
-        const raw = String(row[colStart] || "").trim().toLowerCase();
+      weekHeaders.forEach(({ weekName, colStart, colOrder }) => {
+        // الـ checkbox موجود تحت عمود النسبة (colOrder.percentage)
+        // نجرب كل الأعمدة في نطاق الأسبوع
+        let raw = "";
+        for (let o = 0; o <= 4; o++) {
+          const v = String(row[colStart + o] || "").trim().toLowerCase();
+          if (v === "true" || v === "false" || v === "1" || v === "0") {
+            raw = v;
+            break;
+          }
+        }
+        // أيضاً نجرب عمود النسبة مباشرة
+        if (!raw) raw = String(row[colOrder.percentage] || "").trim().toLowerCase();
+
         const isEnabled = raw === "true" || raw === "1" || raw === "نعم" || raw === "yes";
-        console.log(`[تفعيل] ${weekName} col=${colStart} val="${raw}" → ${isEnabled ? "✅ مفعّل" : "❌ معطّل"}`);
+        console.log(`[تفعيل] ${weekName} → val="${raw}" ${isEnabled ? "✅" : "❌"}`);
         if (isEnabled) enabledWeeks.add(weekName);
       });
       break;
